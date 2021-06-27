@@ -5,6 +5,7 @@ import time
 from math import log
 import numpy as np
 import matplotlib.pyplot as plt
+from collections import defaultdict
 from tensorflow.keras.datasets import mnist
 from sklearn.preprocessing import LabelBinarizer
 from tensorflow.keras.utils import to_categorical
@@ -114,7 +115,7 @@ class DeepNueralNetwork:
 
         return change_p
 
-    def update_network_parameters(self, changes_to_p, epoch_number):
+    def update_network_parameters(self, changes_to_p):
         """
         Update network according to the update rule from stochastic gradient descent.
         θ = θ - η * ∇J(x, y),
@@ -145,21 +146,38 @@ class DeepNueralNetwork:
 
         return np.mean(predictions)
 
-    def train(self, x_train, y_train, x_val, y_val):
+    def train(self, x_train, y_train, x_val, y_val, batch_size = None):
         start_time = time.time()
 
         for iteration in range(self.epochs):
             train_predictions = []
             log_loss = 0
-            for x, y in zip(x_train, y_train):
-                output = self.forward_pass(x)
-                changes_to_p = self.backward_pass(y, output)
-                self.update_network_parameters(changes_to_p, iteration + 1)
 
-                log_loss += -log(output[np.argmax(y)])
+            if batch_size:
+                for batch in range(0, len(x_train), batch_size):
+                    batch_updates = defaultdict(int)
 
-                pred = np.argmax(output)
-                train_predictions.append(pred == np.argmax(y))
+                    for i in range(batch_size):
+                        output = self.forward_pass(x_train[i + batch])
+                        changes_to_p = self.backward_pass(y_train[i + batch], output)
+                        log_loss += -log(output[np.argmax(y_train[i + batch])])
+                        pred = np.argmax(output)
+                        train_predictions.append(pred == np.argmax(y_train[i + batch]))
+
+                        for key, values in changes_to_p.items():
+                            batch_updates[key] += values
+
+                    self.update_network_parameters(batch_updates)
+
+            else:
+                for x, y in zip(x_train, y_train):
+                    output = self.forward_pass(x)
+                    changes_to_p = self.backward_pass(y, output)
+                    log_loss += -log(output[np.argmax(y)])
+                    pred = np.argmax(output)
+                    train_predictions.append(pred == np.argmax(y))
+
+                    self.update_network_parameters(changes_to_p)
 
             self.train_log_loss.append(log_loss/len(x_train))
             train_accuracy = np.mean(train_predictions)
@@ -172,7 +190,7 @@ class DeepNueralNetwork:
 
 
 dnn = DeepNueralNetwork(sizes = [784, 128, 64, 10])
-dnn.train(x_train, y_train, x_val, y_val)
+dnn.train(x_train, y_train, x_val, y_val, batch_size=32)
 
 
 plt.style.use("ggplot")
