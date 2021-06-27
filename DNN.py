@@ -1,5 +1,10 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import time
+from math import log
 import numpy as np
+import matplotlib.pyplot as plt
 from tensorflow.keras.datasets import mnist
 from sklearn.preprocessing import LabelBinarizer
 from tensorflow.keras.utils import to_categorical
@@ -24,9 +29,17 @@ class DeepNueralNetwork:
         self.sizes = sizes
         self.epochs = epochs
         self.l_rate = l_rate
+        self.train_log_loss = []
+        self.val_log_loss = []
+
+        #Activation parameters
+        self.K0_list = []
+        self.K1_list = []
 
         #We will save all the parameters of the neural network in a dictionary.
         self.params = self.initialization()
+
+
 
     def initialization(self):
         #Number of nodes in each layers
@@ -40,6 +53,8 @@ class DeepNueralNetwork:
         params = {'W1' : np.random.randn(hidden_1, input_layer) * np.sqrt(1. / hidden_1), 'W2' : np.random.randn(hidden_2, hidden_1) * np.sqrt(1. / hidden_2), 'W3' : np.random.randn(output_layer, hidden_2) * np.sqrt(1. / output_layer)}
         params['K1'] = k1
         params['K0'] = k0
+        self.K0_list.append(k1)
+        self.K1_list.append(k0)
 
         return params
 
@@ -99,7 +114,7 @@ class DeepNueralNetwork:
 
         return change_p
 
-    def update_network_parameters(self, changes_to_p):
+    def update_network_parameters(self, changes_to_p, epoch_number):
         """
         Update network according to the update rule from stochastic gradient descent.
         θ = θ - η * ∇J(x, y),
@@ -108,36 +123,66 @@ class DeepNueralNetwork:
             gradient ∇J(x, y):  the gradient of the objective function,
                                 i.e. the change for a specific theta θ
         """
+
         for key, value in changes_to_p.items():
             self.params[key] -= self.l_rate * value
+
 
     def compute_accuracy(self, x_val, y_val):
         """
         This function does a forward pass of x, then checks whether the indices of the maximum value of x is equal to the indices of the label y. Then it sums over each prediction and calculate the accuracy. Accuracy is calculated by checking the correct number of output out of total samples.
         """
         predictions = []
+        log_loss = 0
 
         for x, y in zip(x_val, y_val):
             output = self.forward_pass(x)
             pred = np.argmax(output)
             predictions.append(pred == np.argmax(y))
+            log_loss += -log(output[np.argmax(y)])
+
+        self.val_log_loss.append(log_loss /len(x_val))
 
         return np.mean(predictions)
 
     def train(self, x_train, y_train, x_val, y_val):
         start_time = time.time()
-        accuracy_list = []
+
         for iteration in range(self.epochs):
+            train_predictions = []
+            log_loss = 0
             for x, y in zip(x_train, y_train):
                 output = self.forward_pass(x)
                 changes_to_p = self.backward_pass(y, output)
-                self.update_network_parameters(changes_to_p)
+                self.update_network_parameters(changes_to_p, iteration + 1)
 
-            accuracy = self.compute_accuracy(x_val, y_val)
-            accuracy_list.append(accuracy)
-            print('Epoch: {0}, Time Spent: {1:.2f}s, Accuracy: {2:.2f}%'.format(iteration+1, time.time() - start_time, accuracy * 100))
+                log_loss += -log(output[np.argmax(y)])
 
-        return accuracy_list
+                pred = np.argmax(output)
+                train_predictions.append(pred == np.argmax(y))
+
+            self.train_log_loss.append(log_loss/len(x_train))
+            train_accuracy = np.mean(train_predictions)
+            val_accuracy = self.compute_accuracy(x_val, y_val)
+
+            self.K0_list.append(self.params['K0'])
+            self.K1_list.append(self.params['K1'])
+
+            print('Epoch: {0}, Time Spent: {1:.2f}s, Val_Accuracy: {2:.2f}%, Train_Accuracy: {3:.2f}%'.format(iteration+1, time.time() - start_time, val_accuracy * 100, train_accuracy * 100))
+
 
 dnn = DeepNueralNetwork(sizes = [784, 128, 64, 10])
-accurac_list = dnn.train(x_train, y_train, x_val, y_val)
+dnn.train(x_train, y_train, x_val, y_val)
+
+
+plt.style.use("ggplot")
+plt.figure()
+N = np.arange(0, 10)
+
+plt.plot(N, dnn.train_log_loss, label = "traning log loss")
+plt.plot(N, dnn.val_log_loss, label = "validation log loss")
+plt.xlabel("Epochs count")
+plt.ylabel("Train/Val log loss")
+plt.legend()
+plt.plot()
+plt.savefig("Log_loss.png")
