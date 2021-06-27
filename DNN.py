@@ -152,7 +152,8 @@ class DeepNueralNetwork:
         for iteration in range(self.epochs):
             train_predictions = []
             log_loss = 0
-
+            
+            #if batch size is provided explicitly in function call update the parameter only after the completion of forward passes for an entire batch.
             if batch_size:
                 for batch in range(0, len(x_train), batch_size):
                     batch_updates = defaultdict(int)
@@ -168,7 +169,7 @@ class DeepNueralNetwork:
                             batch_updates[key] += values
 
                     self.update_network_parameters(batch_updates)
-
+            #By default update parameters after every single forward pass.
             else:
                 for x, y in zip(x_train, y_train):
                     output = self.forward_pass(x)
